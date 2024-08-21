@@ -31,9 +31,6 @@ Matrix *m_init(int rows, int cols, char bRand)
     m->cols = cols;
     m->vals = malloc(rows * sizeof(float *));
 
-    // if(bRand)
-    //     srand(time(0));
-
     for (int i = 0; i < rows; i++)
     {
         m->vals[i] = malloc(cols * sizeof(float));

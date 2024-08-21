@@ -13,13 +13,13 @@ neuralNetwork* nn_init(const layer_linear defs[])
     // nn.layers = (layer *)malloc(num_layers * sizeof(layer));
 
     neuralNetwork nn;
-    nn.num_layers = sizeof(defs) / sizeof(defs);
-    nn.matrices = (Matrix *)malloc(NEURON_PART_NUM * nn.num_layers * sizeof(Matrix));
+    nn.num_layers = sizeof(defs) / sizeof(layer_linear);
+    nn.matrices = (Matrix *)malloc(NN_PART_MAX * nn.num_layers * sizeof(Matrix));
 
     for (int l = 0; l < nn.num_layers - 1; l++)
     {
         int shape[] = {defs[l].num_neurons, defs[l + 1].num_neurons};
-        for (int j = 0; j < NEURON_PART_NUM - 1; l++)
+        for (int j = 0; j < NN_PART_MAX - 1; l++)
         {
             nn.matrices[l+j] = m_init(shape[0], shape[1], true);
         }
@@ -113,10 +113,10 @@ Matrix *forward(neuralNetwork *nn, Matrix* X)
     //input activations
     nn->matrices[ACT] = X;
 
-    for (int l = 1; l < nn->num_layers; l++)
-    {
-        m_(Z) = m_add(m_mul(m_(W), m_(ACT-1)), m_(b))
-        m_(ACT) = 
-    }
+    // for (int l = 1; l < nn->num_layers; l++)
+    // {
+    //     m_(Z) = m_add(m_mul(m_(W), m_(ACT-1)), m_(b));
+    //     // m_(ACT) = 
+    // }
 }
 

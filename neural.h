@@ -21,9 +21,8 @@ typedef enum
     D_W,
     D_B,
     D_Z,
-
-    NEURON_PART_NUM
-} NEURON_PART;
+    NN_PART_MAX
+} NN_PART;
 
 typedef int (*Activation)(int x);
 

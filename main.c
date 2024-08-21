@@ -1,111 +1,130 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
 
 #include "neural.h"
+const char target_labels[3][50] = {"Iris-setosa", "Iris-versicolor", "Iris-virginica"};
 
+#define BUFFER_SIZE 65536
 
-typedef struct {
-    float SepalLengthCm;
-    float SepalWidthCm;
-    float PetalLengthCm;
-    float PetalWidthCm;
-    int Label;
-} IrisData;
-
-void shuffleData(IrisData *data, int count)
+//-- Id,SepalLengthCm,SepalWidthCm,PetalLengthCm,PetalWidthCm,Species
+void parseLine(const char *line, Matrix **outData, Matrix **outLabel, int dataIndex)
 {
-    srand((unsigned int)time(NULL));
-    for (int i = count - 1; i > 0; i--)
+    //skip ID col
+    const char* start = strchr(line, ',') + 1;
+
+    float dataArr[4];
+    float labelArr[3]; 
+    int col = 0;
+    while (*start)
     {
-        int j = rand() % (i + 1);
-        IrisData temp = data[i];
-        data[i] = data[j];
-        data[j] = temp;
+        const char *end = strchr(start, ',');
+        if (!end)
+        {
+            end = start + strlen(start);
+        }
+
+        size_t len = end - start;
+        char *token = (char *)malloc(len + 1);
+
+        strncpy(token, start, len);
+        token[len] = '\0';
+
+        if (col < 4)
+        {
+            char *p_end;
+            float val = strtof(token, &p_end);
+            free(token);
+
+            dataArr[col] = val;
+        }
+        else
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                if (strcmp(token, target_labels[i]) == 0)
+                {
+                    labelArr[i] = 1.0;
+                }
+            }
+        }
+
+        if (*end)
+        {
+            start = end + 1;
+        }
+        else
+        {
+            break;
+        }  
+
+
+        col++;
     }
+
+    Matrix *dataMat = m_init(4, 1, false);
+    m_fill(dataMat, dataArr);
+    outData[dataIndex] = dataMat;
+
+    Matrix *labelMat = m_init(3, 1, false);
+    m_fill(labelMat, labelArr);
+    outLabel[dataIndex] = labelMat;
 }
-void splitData(IrisData *data, int count, float trainRatio, IrisData **trainData, int *trainCount, IrisData **evalData, int *evalCount)
-{
-    *trainCount = (int)(count * trainRatio);
-    *evalCount = count - *trainCount;
 
-    *trainData = (IrisData *)malloc(*trainCount * sizeof(IrisData));
-    *evalData = (IrisData *)malloc(*evalCount * sizeof(IrisData));
-
-    for (int i = 0; i < *trainCount; i++)
-    {
-        (*trainData)[i] = data[i];
-    }
-
-    for (int i = 0; i < *evalCount; i++)
-    {
-        (*evalData)[i] = data[i + *trainCount];
-    }
-}
-
-void loadData(const char *fileName, IrisData *data, int *count)
+void loadData(const char *fileName, Matrix** data, Matrix** label)
 {
     FILE *file;
     errno_t err;
 
     if ((err = fopen_s(&file, fileName, "r")) != 0)
     {
-        printf("failed to open file");
+        printf("%s(): failed to open file %s", __func__, fileName);
         exit(0);
     }
 
-    const char labels[3][50] = {"Iris-setosa", "Iris-versicolor", "Iris-virginica"};
+    int dataCount = 0;
 
-    char line[256];
-    fgets(line, sizeof(line), file); // skip csv header
-    while (fgets(line, sizeof(line), file))
+    char buffer[BUFFER_SIZE];
+    while (true)
     {
-        int id;
-        float sepalLength, sepalWidth, petalLength, petalWidth;
-        char species[50];
+        size_t bytesRead = fread(buffer, 1, BUFFER_SIZE, file);
+        buffer[bytesRead] = '\0';
 
-        sscanf_s(line, "%d,%f,%f,%f,%f,%49s",
-                 &id,
-                 &sepalLength,
-                 &sepalWidth,
-                 &petalLength,
-                 &petalWidth,
-                 species, (unsigned)_countof(species));
+        char *line = strtok(buffer, "\n");
+        line = strtok(NULL, "\n"); // Skip CSV header
 
-        data[*count].SepalLengthCm = sepalLength;
-        data[*count].SepalWidthCm = sepalWidth;
-        data[*count].PetalLengthCm = petalLength;
-        data[*count].PetalWidthCm = petalWidth;
-
-
-        for (int i = 0; i < 3; i++)
+        while (line != NULL)
         {
-            if(strcmp(species, labels[i]) == 0)
-            {
-                data[*count].Label = i;
-                break;
-            }
-        }
-        (*count)++;
-    }
+            char *lineBuffer = malloc(strlen(line) + 1);
+            strcpy(lineBuffer, line);
 
+            parseLine(lineBuffer, data, label, dataCount);
+
+            free(lineBuffer);
+            line = strtok(NULL, "\n");
+
+            dataCount++;
+        }
+
+        if (feof(file))
+            break;
+    }
     fclose(file);
 }
 
 int main()
 {
-    IrisData data[150];
-    IrisData *trainData;
-    IrisData *evalData;
+    // we know that we have 150 data points
+    const char fileName[] = "data.csv";
+    const int dataCount = 150;
+    Matrix **dataArr = malloc(sizeof(Matrix *) * dataCount);
+    Matrix **labelArr = malloc(sizeof(Matrix *) * dataCount);
 
-    char fileName[] = "data.csv";
-    int count, trainCount, evalCount;
-    float trainRatio = 0.8; // 80% training, 20% evaluation
+    loadData(fileName, dataArr, labelArr);
 
-    loadData(fileName, data, &count);
-    shuffleData(data, count);
-    splitData(data, count, trainRatio, &trainData, &trainCount, &evalData, &evalCount);
 
-    ///////DEFINE MODEL
+    // DEFINE MODEL
     layer_linear input;
     input.num_neurons = 4;
     input.activation = RELU;
@@ -123,41 +142,25 @@ int main()
 
     // TRAINING
     const float EPSILON = .1f; // learning rate
-    for (int i = 0; i < trainCount; i++)
+
+    for (int i = 0; i < dataCount; i++)
     {
-        float label[3] = {0, 0, 0};
-        for (int j = 0; j < 3; j++)
-        {
-            label[j] = trainData[i].Label == j ? 1.0 : 0.0;
-        }
-        Matrix *Y = m_init(3, 1, false);
-        m_fill(Y, label);
+        Matrix *X = *(dataArr + i);
+        Matrix *Y = *(labelArr + i);
+        // Matrix *yHat = forward(nn, X);
+        // // Matrix *Cost = compute_cost(yHat, Y);
 
-        float x[] = {trainData[i].PetalLengthCm,
-                     trainData[i].PetalWidthCm,
-                     trainData[i].SepalLengthCm,
-                     trainData[i].SepalWidthCm};
-        Matrix *X = m_init(4, 1, false);
-        m_fill(X, x);
-
-        Matrix *yHat = forward(nn, X);
-        Matrix *Cost = compute_cost(yHat, Y);
-
-        compute_gradients(nn, Cost);
-
-        m_free(X);
-        m_free(Y);
+        // compute_gradients(nn, Cost);
     }
 
-    // float x = sigma(-2.0f);
-    // printf("%f", x);
-    //EVAL
-    for (int i = 0; i < evalCount; i++)
+    for (int i = 0; i < dataCount; i++)
     {
+        m_free(dataArr[i]);
+        m_free(labelArr[i]);
     }
 
-    free(trainData);
-    free(evalData);
+    free(dataArr);
+    free(labelArr);
 
     return 0;
 }
